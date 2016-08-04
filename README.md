@@ -1,2 +1,2 @@
-# Decaying-Collection
-A .NET library contains a class defining a decaying collection. Items in a decaying collection are removed after a certain period of time is passed.
+# Decaying-Collections
+.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying has a timespan specified which is used as a timespan for its elements.
