@@ -55,6 +55,7 @@
     <Compile Include="TimerWrapper.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Karadzhov.DecayingCollections.nuspec" />
     <None Include="Karadzhov.DecayingCollections.snk" />
   </ItemGroup>
   <ItemGroup>
