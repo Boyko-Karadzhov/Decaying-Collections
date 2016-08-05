@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Karadzhov.DecayingCollections</id>
-    <version>0.1.0.0</version>
+    <version>0.1.0.6</version>
     <title>Decaying-Collections</title>
     <authors>Boyko Karadzhov</authors>
     <owners>Boyko Karadzhov</owners>
@@ -11,8 +11,9 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying has a timespan specified which is used as a timespan for its elements.</description>
     <summary>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying has a timespan specified which is used as a timespan for its elements.</summary>
-    <releaseNotes>0.1.0.0
-- nothing to see here;
+    <releaseNotes>0.1.0.6
+- Implemented DecayingHashSet;
+- Implemented DecayingBag;
 </releaseNotes>
     <copyright>Copyright 2016</copyright>
     <tags>collections hashset bag</tags>
