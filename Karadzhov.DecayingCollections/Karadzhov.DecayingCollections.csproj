@@ -48,7 +48,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DecayingBag.cs" />
     <Compile Include="DecayingCollection.cs" />
+    <Compile Include="DecayingHashSet.cs" />
     <Compile Include="ItemDecayedEventArgs.cs" />
     <Compile Include="ITimer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

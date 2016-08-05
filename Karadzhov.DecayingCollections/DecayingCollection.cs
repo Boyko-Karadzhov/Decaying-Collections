@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading;
 
 namespace Karadzhov.DecayingCollections
 {
@@ -17,7 +18,7 @@ namespace Karadzhov.DecayingCollections
     {
         private readonly int _lifespan;
         private readonly TCollection[] _ring;
-
+        private readonly ReaderWriterLockSlim _lock;
         private volatile int _count;
         private volatile int _cursor;
 
@@ -62,6 +63,7 @@ namespace Karadzhov.DecayingCollections
                 this._ring[i] = new TCollection();
 
             this._timer = timer;
+            this._lock = new ReaderWriterLockSlim();
         }
 
 
@@ -92,11 +94,11 @@ namespace Karadzhov.DecayingCollections
             var newCursor = (this._cursor + 1) % this._ring.Length;
             var collectionToRemove = this._ring[newCursor];
             this._ring[newCursor] = new TCollection();
-            this._count -= collectionToRemove.Count;
+            Interlocked.Add(ref this._count, - collectionToRemove.Count);
             this.SetupTimer();
 
             // The segment at the new cursor is ready for use.
-            this._cursor = newCursor;
+            Interlocked.Exchange(ref this._cursor, newCursor);
 
             return collectionToRemove;
         }
@@ -125,10 +127,19 @@ namespace Karadzhov.DecayingCollections
         /// Adds an item to the <see cref="T:System.Collections.Generic.ICollection`1" />.
         /// </summary>
         /// <param name="item">The object to add to the <see cref="T:System.Collections.Generic.ICollection`1" />.</param>
-        public void Add(TItem item)
+        public virtual void Add(TItem item)
         {
-            this._ring[this._cursor].Add(item);
-            this._count++;
+            this._lock.EnterWriteLock();
+            try
+            {
+                this._ring[this._cursor].Add(item);
+            }
+            finally
+            {
+                this._lock.ExitWriteLock();
+            }
+
+            Interlocked.Increment(ref this._count);
             this.SetupTimer();
         }
 
@@ -148,7 +159,31 @@ namespace Karadzhov.DecayingCollections
         /// <returns>
         /// true if <paramref name="item" /> is found in the <see cref="T:System.Collections.Generic.ICollection`1" />; otherwise, false.
         /// </returns>
-        public bool Contains(TItem item) => this._ring.Any(s => s.Contains(item));
+        public bool Contains(TItem item)
+        {
+            for (var i = 0; i < this._ring.Length; i++)
+            {
+                if (i != this._cursor && this._ring[i].Contains(item))
+                {
+                    return true;
+                }
+                else
+                {
+                    this._lock.EnterReadLock();
+                    try
+                    {
+                        if (this._ring[i].Contains(item))
+                            return true;
+                    }
+                    finally
+                    {
+                        this._lock.ExitReadLock();
+                    }
+                }
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Copies the elements of the <see cref="T:System.Collections.Generic.ICollection`1" /> to an <see cref="T:System.Array" />, starting at a particular <see cref="T:System.Array" /> index.
@@ -164,8 +199,27 @@ namespace Karadzhov.DecayingCollections
                 throw new ArgumentException("The array is not big enough for this collection.", nameof(array));
 
             var i = arrayIndex;
-            foreach (var item in this)
-                array[i++] = item;
+            for (var j = 0; j < this._ring.Length; j++)
+            {
+                if (j != this._cursor)
+                {
+                    foreach (var item in this._ring[j])
+                        array[i++] = item;
+                }
+                else
+                {
+                    this._lock.EnterReadLock();
+                    try
+                    {
+                        foreach (var item in this._ring[j])
+                            array[i++] = item;
+                    }
+                    finally
+                    {
+                        this._lock.ExitReadLock();
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -187,16 +241,49 @@ namespace Karadzhov.DecayingCollections
         /// </returns>
         public bool Remove(TItem item)
         {
-            if (this._ring.Any(s => s.Remove(item)))
+            for (var i = 0; i < this._ring.Length; i++)
             {
-                this._count--;
-                this.SetupTimer();
-                return true;
+                if (i != this._cursor && this._ring[i].Remove(item))
+                {
+                    Interlocked.Decrement(ref this._count);
+                    this.SetupTimer();
+                    return true;
+                }
+                else
+                {
+                    bool hasRemoved;
+                    this._lock.EnterUpgradeableReadLock();
+                    try
+                    {
+                        if (this._ring[i].Contains(item))
+                        {
+                            this._lock.EnterWriteLock();
+                            try
+                            {
+                                hasRemoved = this._ring[i].Remove(item);
+                            }
+                            finally
+                            {
+                                this._lock.ExitWriteLock();
+                            }
+                        }
+                        else
+                        {
+                            hasRemoved = false;
+                        }
+                    }
+                    finally
+                    {
+                        this._lock.ExitUpgradeableReadLock();
+                    }
+
+                    if (hasRemoved)
+                        return true;
+                }
+
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
 
         /// <summary>
