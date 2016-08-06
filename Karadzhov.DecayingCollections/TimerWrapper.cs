@@ -9,36 +9,38 @@ namespace Karadzhov.DecayingCollections
     /// <seealso cref="Karadzhov.DecayingCollections.ITimer" />
     internal sealed class TimerWrapper : ITimer
     {
-        private Timer _timer;
+        private readonly Timer _timer;
         private Action _callback;
+        private bool _isRunning;
 
         /// <summary>
-        /// Starts the timer with the specified period in seconds.
+        /// Initializes a new instance of the <see cref="TimerWrapper"/> class.
         /// </summary>
-        /// <param name="periodInSeconds">The period in seconds.</param>
-        /// <param name="callback">The callback.</param>
-        /// <exception cref="InvalidOperationException">A timer is already started. Call Stop first.</exception>
-        public void Start(int periodInSeconds, Action callback)
+        public TimerWrapper()
         {
-            if (null != this._timer)
-                throw new InvalidOperationException("A timer is already started. Call Stop first.");
+            this._timer = new Timer(this.TimerCallback, state: 0, dueTime: Timeout.Infinite, period: Timeout.Infinite);
+        }
 
+        /// <summary>
+        /// Starts the timer with the specified period in milliseconds.
+        /// </summary>
+        /// <param name="periodMilliseconds">The period in milliseconds.</param>
+        /// <param name="callback">The callback.</param>
+        public void Start(int periodMilliseconds, Action callback)
+        {
+            this._isRunning = true;
             this._callback = callback;
-            this._timer = new Timer(this.TimerCallback, null, 0, periodInSeconds * 1000);
+            this._timer.Change(dueTime: 0, period: periodMilliseconds);
         }
 
         /// <summary>
         /// Pauses this instance.
         /// </summary>
-        /// <exception cref="InvalidOperationException">The timer is not started so there is nothing to stop.</exception>
         public void Pause()
         {
-            if (null == this._timer)
-                throw new InvalidOperationException("The timer is not started so there is nothing to stop.");
-
+            this._isRunning = false;
             this._callback = null;
-            this._timer.Dispose();
-            this._timer = null;
+            this._timer.Change(Timeout.Infinite, Timeout.Infinite);
         }
 
         /// <summary>
@@ -47,19 +49,13 @@ namespace Karadzhov.DecayingCollections
         /// <value>
         /// <c>true</c> if this instance is running; otherwise, <c>false</c>.
         /// </value>
-        public bool IsRunning => null != this._timer;
+        public bool IsRunning => this._isRunning;
 
         private void TimerCallback(object state) => this._callback?.Invoke();
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>
-        public void Dispose()
-        {
-            if (null != this._timer)
-            {
-                this.Pause();
-            }
-        }
+        public void Dispose() => this._timer.Dispose();
     }
 }

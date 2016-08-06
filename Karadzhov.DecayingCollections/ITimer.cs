@@ -9,11 +9,11 @@ namespace Karadzhov.DecayingCollections
     public interface ITimer : IDisposable
     {
         /// <summary>
-        /// Starts the timer with the specified period in seconds.
+        /// Starts the timer with the specified period in milliseconds.
         /// </summary>
-        /// <param name="periodInSeconds">The period in seconds.</param>
+        /// <param name="periodMilliseconds">The period in milliseconds.</param>
         /// <param name="callback">The callback.</param>
-        void Start(int periodInSeconds, Action callback);
+        void Start(int periodMilliseconds, Action callback);
 
         /// <summary>
         /// Pauses this instance.

@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Karadzhov.DecayingCollections.Tests
 {
@@ -11,7 +12,21 @@ namespace Karadzhov.DecayingCollections.Tests
         [ExpectedException(typeof(ArgumentNullException))]
         public void Constructor_NullTimer_Throws()
         {
-            using (new SampleDecayingCollection(null, 0, 0)) { }
+            using (new SampleDecayingCollection(null, 1, 1)) { }
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(ArgumentOutOfRangeException))]
+        public void Constructor_0Lifespan_Throws()
+        {
+            using (new SampleDecayingCollection(new FakeTimer(), 0, 1)) { }
+        }
+
+        [TestMethod]
+        [ExpectedException(typeof(ArgumentOutOfRangeException))]
+        public void Constructor_0Steps_Throws()
+        {
+            using (new SampleDecayingCollection(new FakeTimer(), 1, 0)) { }
         }
 
         [TestMethod]
@@ -35,7 +50,7 @@ namespace Karadzhov.DecayingCollections.Tests
             var item3 = new object();
             var timer = new FakeTimer();
 
-            using (var collection = new SampleDecayingCollection(timer, 0, 5))
+            using (var collection = new SampleDecayingCollection(timer, 1, 5))
             {
                 collection.Add(item1);
                 timer.Execute();
@@ -60,7 +75,7 @@ namespace Karadzhov.DecayingCollections.Tests
             var timer = new FakeTimer();
             object eventArgsItem = null;
 
-            using (var collection = new SampleDecayingCollection(timer, 0, 5))
+            using (var collection = new SampleDecayingCollection(timer, 1, 5))
             {
                 collection.ItemDecayed += (s, e) => eventArgsItem = e.Item;
                 collection.Add(item1);
@@ -90,7 +105,7 @@ namespace Karadzhov.DecayingCollections.Tests
             var item3 = new object();
             var timer = new FakeTimer();
 
-            using (var collection = new SampleDecayingCollection(timer, 0, 5))
+            using (var collection = new SampleDecayingCollection(timer, 1, 5))
             {
                 collection.Add(item1);
                 timer.Execute();
@@ -114,7 +129,7 @@ namespace Karadzhov.DecayingCollections.Tests
             var items = new List<object>(3) { 1, 2, 3 };
             var timer = new FakeTimer();
 
-            using (var collection = new SampleDecayingCollection(timer, 0, 5))
+            using (var collection = new SampleDecayingCollection(timer, 1, 5))
             {
                 for (var i = 0; i < items.Count; i++)
                 {
@@ -137,7 +152,7 @@ namespace Karadzhov.DecayingCollections.Tests
             var item3 = new object();
             var timer = new FakeTimer();
 
-            using (var collection = new SampleDecayingCollection(timer, 0, 5))
+            using (var collection = new SampleDecayingCollection(timer, 1, 5))
             {
                 collection.Add(item1);
                 timer.Execute();
@@ -153,6 +168,33 @@ namespace Karadzhov.DecayingCollections.Tests
                 Assert.IsTrue(collection.Contains(item1));
                 Assert.IsFalse(collection.Contains(item2));
                 Assert.IsTrue(collection.Contains(item3));
+            }
+        }
+
+        [TestMethod]
+        public void Add_RealTimer_ItemDecayed()
+        {
+            var item = new object();
+            object decayedItem = null;
+            using (var trigger = new ManualResetEvent(false))
+            {
+                using (var collection = new SampleDecayingCollection(lifespanInSeconds: 1, steps: 4))
+                {
+                    collection.ItemDecayed += (sender, e) =>
+                    {
+                        decayedItem = e.Item;
+                        trigger.Set();
+                    };
+
+                    collection.Add(item);
+
+                    // 250 is the size of the step, give it as a tolerance.
+                    trigger.WaitOne(1250);
+
+                    Assert.AreEqual(0, collection.Count);
+                    Assert.IsNotNull(decayedItem);
+                    Assert.AreSame(item, decayedItem);
+                }
             }
         }
     }

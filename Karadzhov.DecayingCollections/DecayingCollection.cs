@@ -16,7 +16,7 @@ namespace Karadzhov.DecayingCollections
     public abstract class DecayingCollection<TItem, TCollection> : ICollection<TItem>, IDisposable
         where TCollection : ICollection<TItem>, new()
     {
-        private readonly int _lifespan;
+        private readonly int _lifespanMs;
         private readonly TCollection[] _ring;
         private readonly ReaderWriterLockSlim _lock;
         private volatile int _count;
@@ -38,7 +38,7 @@ namespace Karadzhov.DecayingCollections
         /// Initializes a new instance of the <see cref="DecayingCollection{TItem, TCollection}"/> class.
         /// </summary>
         /// <param name="lifespanInSeconds">The lifespan of an item in seconds.</param>
-        /// <param name="steps">The number of steps that the lifetime is divided into.</param>
+        /// <param name="steps">The number of steps that the lifespan is divided into.</param>
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "It's set to a private field and is disposed on this object's Dispose.")]
         protected DecayingCollection(int lifespanInSeconds, int steps)
             : this(new TimerWrapper(), lifespanInSeconds, steps)
@@ -50,14 +50,20 @@ namespace Karadzhov.DecayingCollections
         /// </summary>
         /// <param name="timer">A timer instance used by this collection to measure time.</param>
         /// <param name="lifespanInSeconds">The lifespan of an item in seconds.</param>
-        /// <param name="steps">The number of steps that the lifetime is divided into.</param>
+        /// <param name="steps">The number of steps that the lifespan is divided into.</param>
         /// <exception cref="ArgumentNullException"></exception>
         protected DecayingCollection(ITimer timer, int lifespanInSeconds, int steps)
         {
             if (null == timer)
                 throw new ArgumentNullException(nameof(timer));
 
-            this._lifespan = lifespanInSeconds;
+            if (lifespanInSeconds < 1)
+                throw new ArgumentOutOfRangeException(nameof(lifespanInSeconds), "lifespan has to be at least 1 second.");
+
+            if (steps < 1)
+                throw new ArgumentOutOfRangeException(nameof(steps), "There has to be at least one step.");
+
+            this._lifespanMs = lifespanInSeconds * 1000;
             this._ring = new TCollection[steps];
             for (var i = 0; i < steps; i++)
                 this._ring[i] = new TCollection();
@@ -108,7 +114,7 @@ namespace Karadzhov.DecayingCollections
             if (0 == this._count && this._timer.IsRunning)
                 this._timer.Pause();
             else if (this._count > 0 && !this._timer.IsRunning)
-                this._timer.Start(this._lifespan, this.TimerElapsed);
+                this._timer.Start(this._lifespanMs / this._ring.Length, this.TimerElapsed);
         }
 
         #region ICollection<T>
@@ -313,6 +319,8 @@ namespace Karadzhov.DecayingCollections
                         this._timer.Dispose();
                         this._timer = null;
                     }
+
+                    this._lock.Dispose();
                 }
 
                 this.disposedValue = true;
