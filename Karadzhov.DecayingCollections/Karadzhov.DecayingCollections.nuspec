@@ -9,8 +9,8 @@
     <licenseUrl>https://raw.githubusercontent.com/Boyko-Karadzhov/Decaying-Collections/master/LICENSE</licenseUrl>
     <projectUrl>https://github.com/Boyko-Karadzhov/Decaying-Collections</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <description>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a timespan for its elements.</description>
-    <summary>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a timespan for its elements.</summary>
+    <description>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a lifespan for its elements.</description>
+    <summary>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a lifespan for its elements.</summary>
     <releaseNotes>0.1.0.6
 - Implemented DecayingHashSet;
 - Implemented DecayingBag;
