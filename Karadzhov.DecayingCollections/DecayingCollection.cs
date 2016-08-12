@@ -16,13 +16,14 @@ namespace Karadzhov.DecayingCollections
     public abstract class DecayingCollection<TItem, TCollection> : ICollection<TItem>, IDisposable
         where TCollection : ICollection<TItem>, new()
     {
-        private readonly int _lifespanMs;
         private readonly TCollection[] _ring;
         private readonly ReaderWriterLockSlim _lock;
+        private readonly int _lifespanMs;
+        private readonly ITimer _timer;
+
         private volatile int _count;
         private volatile int _cursor;
 
-        private ITimer _timer;
         private bool disposedValue;
 
         /// <summary>
@@ -79,6 +80,30 @@ namespace Karadzhov.DecayingCollections
         public event EventHandler<ItemDecayedEventArgs<TItem>> ItemDecayed;
 
         /// <summary>
+        /// Gets the ring of collections.
+        /// </summary>
+        /// <value>
+        /// The ring.
+        /// </value>
+        protected IReadOnlyList<TCollection> Ring => this._ring;
+
+        /// <summary>
+        /// Gets the cursor indicating current step in the Ring.
+        /// </summary>
+        /// <value>
+        /// The cursor.
+        /// </value>
+        protected int Cursor => this._cursor;
+
+        /// <summary>
+        /// Gets the lock.
+        /// </summary>
+        /// <value>
+        /// The lock.
+        /// </value>
+        protected ReaderWriterLockSlim Lock => this._lock;
+
+        /// <summary>
         /// Called when an item has decayed.
         /// </summary>
         /// <param name="item">The item.</param>
@@ -103,8 +128,17 @@ namespace Karadzhov.DecayingCollections
             Interlocked.Add(ref this._count, - collectionToRemove.Count);
             this.SetupTimer();
 
-            // The segment at the new cursor is ready for use.
-            Interlocked.Exchange(ref this._cursor, newCursor);
+            // Make sure all all read/write operations on the current ring item are done before changing the cursor.
+            this.Lock.EnterWriteLock();
+            try
+            {
+                // The segment at the new cursor is ready for use.
+                Interlocked.Exchange(ref this._cursor, newCursor);
+            }
+            finally
+            {
+                this.Lock.ExitWriteLock();
+            }
 
             return collectionToRemove;
         }
@@ -122,7 +156,17 @@ namespace Karadzhov.DecayingCollections
         /// <summary>
         /// Gets the number of elements contained in the <see cref="T:System.Collections.Generic.ICollection`1" />.
         /// </summary>
-        public int Count => this._count;
+        public int Count
+        {
+            get
+            {
+                return this._count;
+            }
+            protected set
+            {
+                Interlocked.Exchange(ref this._count, value);
+            }
+        }
 
         /// <summary>
         /// Gets a value indicating whether the <see cref="T:System.Collections.Generic.ICollection`1" /> is read-only.
@@ -167,25 +211,28 @@ namespace Karadzhov.DecayingCollections
         /// </returns>
         public bool Contains(TItem item)
         {
+            bool isFound;
             for (var i = 0; i < this._ring.Length; i++)
             {
-                if (i != this._cursor && this._ring[i].Contains(item))
+                if (i != this._cursor)
                 {
-                    return true;
+                    isFound = this._ring[i].Contains(item);
                 }
                 else
                 {
                     this._lock.EnterReadLock();
                     try
                     {
-                        if (this._ring[i].Contains(item))
-                            return true;
+                        isFound = this._ring[i].Contains(item);
                     }
                     finally
                     {
                         this._lock.ExitReadLock();
                     }
                 }
+
+                if (isFound)
+                    return true;
             }
 
             return false;
@@ -247,17 +294,15 @@ namespace Karadzhov.DecayingCollections
         /// </returns>
         public bool Remove(TItem item)
         {
+            bool hasRemoved;
             for (var i = 0; i < this._ring.Length; i++)
             {
-                if (i != this._cursor && this._ring[i].Remove(item))
+                if (i != this._cursor)
                 {
-                    Interlocked.Decrement(ref this._count);
-                    this.SetupTimer();
-                    return true;
+                    hasRemoved = this._ring[i].Remove(item);
                 }
                 else
                 {
-                    bool hasRemoved;
                     this._lock.EnterUpgradeableReadLock();
                     try
                     {
@@ -282,9 +327,12 @@ namespace Karadzhov.DecayingCollections
                     {
                         this._lock.ExitUpgradeableReadLock();
                     }
+                }
 
-                    if (hasRemoved)
-                        return true;
+                if (hasRemoved)
+                {
+                    Interlocked.Decrement(ref this._count);
+                    return true;
                 }
 
             }
@@ -314,12 +362,7 @@ namespace Karadzhov.DecayingCollections
             {
                 if (disposing)
                 {
-                    if (null != this._timer)
-                    {
-                        this._timer.Dispose();
-                        this._timer = null;
-                    }
-
+                    this._timer.Dispose();
                     this._lock.Dispose();
                 }
 

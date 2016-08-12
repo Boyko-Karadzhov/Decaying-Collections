@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="DecayingBag.cs" />
     <Compile Include="DecayingCollection.cs" />
+    <Compile Include="DecayingDictionary.cs" />
     <Compile Include="DecayingHashSet.cs" />
     <Compile Include="ItemDecayedEventArgs.cs" />
     <Compile Include="ITimer.cs" />
