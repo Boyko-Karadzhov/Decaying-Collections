@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>Karadzhov.DecayingCollections</id>
-    <version>0.2.0.14</version>
+    <version>0.2.0.16</version>
     <title>Decaying-Collections</title>
     <authors>Boyko Karadzhov</authors>
     <owners>Boyko Karadzhov</owners>
@@ -12,7 +12,7 @@
     <description>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a lifespan for its elements.</description>
     <summary>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a lifespan for its elements.</summary>
     <releaseNotes>
-      0.2.0.14
+      0.2.0.16
       - Implemented DecayingDictionary;
       - Exposed Ring, Count setter and Cursor to inheritors of DecayingCollection;
       - Stricter concurrency handling;
