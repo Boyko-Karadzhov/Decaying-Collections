@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace Karadzhov.DecayingCollections
 {
+    /// <summary>
+    /// Represents a dictionary with decaying elements.
+    /// </summary>
+    /// <typeparam name="TKey">The type of the key.</typeparam>
+    /// <typeparam name="TValue">The type of the value.</typeparam>
+    /// <seealso cref="Karadzhov.DecayingCollections.DecayingCollection{System.Collections.Generic.KeyValuePair{TKey, TValue}, System.Collections.Generic.Dictionary{TKey, TValue}}" />
+    /// <seealso cref="System.Collections.Generic.IDictionary{TKey, TValue}" />
+    /// <seealso cref="System.Collections.Generic.IReadOnlyDictionary{TKey, TValue}" />
     public sealed class DecayingDictionary<TKey, TValue> : DecayingCollection<KeyValuePair<TKey, TValue>, Dictionary<TKey, TValue>>, IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>
     {
         /// <summary>
@@ -23,6 +31,16 @@ namespace Karadzhov.DecayingCollections
         }
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="DecayingDictionary{TKey, TValue}"/> class.
+        /// </summary>
+        /// <param name="timer">A timer instance used by this collection to measure time.</param>
+        /// <param name="lifespanInSeconds">The lifespan of an item in seconds.</param>
+        /// <param name="steps">The number of steps that the lifespan is divided into.</param>
+        public DecayingDictionary(ITimer timer, int lifespanInSeconds, int steps) : base(timer, lifespanInSeconds, steps)
+        {
+        }
+
+        /// <summary>
         /// Gets or sets the <see cref="TValue"/> with the specified key.
         /// </summary>
         /// <value>
@@ -38,7 +56,7 @@ namespace Karadzhov.DecayingCollections
         {
             get
             {
-                if (null != key)
+                if (null == key)
                     throw new ArgumentNullException(nameof(key));
 
                 TValue value;
@@ -49,7 +67,7 @@ namespace Karadzhov.DecayingCollections
             }
             set
             {
-                if (null != key)
+                if (null == key)
                     throw new ArgumentNullException(nameof(key));
 
                 if (this.ContainsKey(key))
@@ -69,21 +87,14 @@ namespace Karadzhov.DecayingCollections
                 var keys = new List<TKey>(this.Count);
                 for (int i = 0; i < this.Ring.Count; i++)
                 {
-                    if (i != this.Cursor)
+                    this.Locks[i].EnterReadLock();
+                    try
                     {
                         keys.AddRange(this.Ring[i].Keys);
                     }
-                    else
+                    finally
                     {
-                        this.Lock.EnterReadLock();
-                        try
-                        {
-                            keys.AddRange(this.Ring[i].Keys);
-                        }
-                        finally
-                        {
-                            this.Lock.ExitReadLock();
-                        }
+                        this.Locks[i].ExitReadLock();
                     }
                 }
 
@@ -101,21 +112,14 @@ namespace Karadzhov.DecayingCollections
                 var values = new List<TValue>(this.Count);
                 for (int i = 0; i < this.Ring.Count; i++)
                 {
-                    if (i != this.Cursor)
+                    this.Locks[i].EnterReadLock();
+                    try
                     {
                         values.AddRange(this.Ring[i].Values);
                     }
-                    else
+                    finally
                     {
-                        this.Lock.EnterReadLock();
-                        try
-                        {
-                            values.AddRange(this.Ring[i].Values);
-                        }
-                        finally
-                        {
-                            this.Lock.ExitReadLock();
-                        }
+                        this.Locks[i].ExitReadLock();
                     }
                 }
 
@@ -126,24 +130,12 @@ namespace Karadzhov.DecayingCollections
         /// <summary>
         /// Gets an <see cref="T:System.Collections.Generic.ICollection`1" /> containing the keys of the <see cref="T:System.Collections.Generic.IDictionary`2" />.
         /// </summary>
-        IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys
-        {
-            get
-            {
-                return this.Keys;
-            }
-        }
+        IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => this.Keys;
 
         /// <summary>
         /// Gets an <see cref="T:System.Collections.Generic.ICollection`1" /> containing the values in the <see cref="T:System.Collections.Generic.IDictionary`2" />.
         /// </summary>
-        IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values
-        {
-            get
-            {
-                return this.Values;
-            }
-        }
+        IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => this.Values;
 
         /// <summary>
         /// Adds an element with the provided key and value to the <see cref="T:System.Collections.Generic.IDictionary`2" />.
@@ -179,21 +171,14 @@ namespace Karadzhov.DecayingCollections
             bool isFound;
             for (var i = 0; i < this.Ring.Count; i++)
             {
-                if (i != this.Cursor)
+                this.Locks[i].EnterReadLock();
+                try
                 {
                     isFound = this.Ring[i].ContainsKey(key);
                 }
-                else
+                finally
                 {
-                    this.Lock.EnterReadLock();
-                    try
-                    {
-                        isFound = this.Ring[i].ContainsKey(key);
-                    }
-                    finally
-                    {
-                        this.Lock.ExitReadLock();
-                    }
+                    this.Locks[i].ExitReadLock();
                 }
 
                 if (isFound)
@@ -219,33 +204,26 @@ namespace Karadzhov.DecayingCollections
             bool isFound;
             for (var i = 0; i < this.Ring.Count; i++)
             {
-                if (i != this.Cursor)
+                this.Locks[i].EnterUpgradeableReadLock();
+                try
                 {
-                    isFound = this.Ring[i].Remove(key);
-                }
-                else
-                {
-                    this.Lock.EnterUpgradeableReadLock();
-                    try
+                    isFound = this.Ring[i].ContainsKey(key);
+                    if (isFound)
                     {
-                        isFound = this.Ring[i].ContainsKey(key);
-                        if (isFound)
+                        this.Locks[i].EnterWriteLock();
+                        try
                         {
-                            this.Lock.EnterWriteLock();
-                            try
-                            {
-                                this.Ring[i].Remove(key);
-                            }
-                            finally
-                            {
-                                this.Lock.ExitWriteLock();
-                            }
+                            this.Ring[i].Remove(key);
+                        }
+                        finally
+                        {
+                            this.Locks[i].ExitWriteLock();
                         }
                     }
-                    finally
-                    {
-                        this.Lock.ExitUpgradeableReadLock();
-                    }
+                }
+                finally
+                {
+                    this.Locks[i].ExitUpgradeableReadLock();
                 }
 
                 if (isFound)
@@ -275,21 +253,14 @@ namespace Karadzhov.DecayingCollections
             bool isFound;
             for (var i = 0; i < this.Ring.Count; i++)
             {
-                if (i != this.Cursor)
+                this.Locks[i].EnterReadLock();
+                try
                 {
                     isFound = this.Ring[i].TryGetValue(key, out value);
                 }
-                else
+                finally
                 {
-                    this.Lock.EnterReadLock();
-                    try
-                    {
-                        isFound = this.Ring[i].TryGetValue(key, out value);
-                    }
-                    finally
-                    {
-                        this.Lock.ExitReadLock();
-                    }
+                    this.Locks[i].ExitReadLock();
                 }
 
                 if (isFound)

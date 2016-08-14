@@ -6,8 +6,9 @@
 ## Contents
 
 Currently there are two implemented Decaying collections:
-- `DecayingHashSet<TItem>` - behaves like HashSet but with decaying behavior.
+- `DecayingHashSet<TItem>` - behaves like HashSet but with decaying behavior. Does not implement ISet;
 - `DecayingBag<TItem>` - allows repetitions but stil unordered;
+- `DecayingDictionary<TKey, TValue>` - Dictionary with decaying behavior, implements IDictionary;
 
 ## Design
 

@@ -11,14 +11,20 @@
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a lifespan for its elements.</description>
     <summary>.NET library that provides thread-safe collections that automatically remove their elements after a particular time has passed. Each instance of a decaying collection has a timespan specified which is used as a lifespan for its elements.</summary>
-    <releaseNotes>0.1.0.6
-- Implemented DecayingHashSet;
-- Implemented DecayingBag;
-0.1.1.8
-- Fixed a bug which significantly extended the lifespan of objects;
-- Parameter validation for lifespan and steps on the constructors;
-- Breaking change: ITimer, used by the abstract DecayingCollection should accept a period in milliseconds instead of seconds;
-</releaseNotes>
+    <releaseNotes>
+      0.2.0.9
+      - Implemented DecayingDictionary;
+      - Exposed Ring, Count setter and Cursor to inheritors of DecayingCollection;
+      - Stricter concurrency handling;
+      - Fixed a bug causing inconsistent Count when removing from current step;
+      0.1.1.8
+      - Fixed a bug which significantly extended the lifespan of objects;
+      - Parameter validation for lifespan and steps on the constructors;
+      - Breaking change: ITimer, used by the abstract DecayingCollection should accept a period in milliseconds instead of seconds;
+      0.1.0.6
+      - Implemented DecayingHashSet;
+      - Implemented DecayingBag;
+    </releaseNotes>
     <copyright>Copyright 2016</copyright>
     <tags>collections hashset bag</tags>
   </metadata>

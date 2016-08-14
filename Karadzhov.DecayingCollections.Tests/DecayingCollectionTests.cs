@@ -197,5 +197,20 @@ namespace Karadzhov.DecayingCollections.Tests
                 }
             }
         }
+
+        [TestMethod]
+        public void Remove_FromCurrentStep_ConsistedCount()
+        {
+            var item = new object();
+            var timer = new FakeTimer();
+
+            using (var collection = new SampleDecayingCollection(timer, 1, 5))
+            {
+                collection.Add(item);
+                collection.Remove(item);
+
+                Assert.AreEqual(0, collection.Count);
+            }
+        }
     }
 }

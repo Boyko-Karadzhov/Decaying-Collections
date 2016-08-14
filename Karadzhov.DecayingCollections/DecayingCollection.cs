@@ -14,10 +14,10 @@ namespace Karadzhov.DecayingCollections
     /// <typeparam name="TCollection">The type of the collection.</typeparam>
     /// <seealso cref="System.Collections.Generic.ICollection{TItem}" />
     public abstract class DecayingCollection<TItem, TCollection> : ICollection<TItem>, IDisposable
-        where TCollection : ICollection<TItem>, new()
+        where TCollection : class, ICollection<TItem>, new()
     {
         private readonly TCollection[] _ring;
-        private readonly ReaderWriterLockSlim _lock;
+        private readonly ReaderWriterLockSlim[] _locks;
         private readonly int _lifespanMs;
         private readonly ITimer _timer;
 
@@ -66,11 +66,15 @@ namespace Karadzhov.DecayingCollections
 
             this._lifespanMs = lifespanInSeconds * 1000;
             this._ring = new TCollection[steps];
-            for (var i = 0; i < steps; i++)
-                this._ring[i] = new TCollection();
 
             this._timer = timer;
-            this._lock = new ReaderWriterLockSlim();
+            this._locks = new ReaderWriterLockSlim[this._ring.Length];
+
+            for (var i = 0; i < steps; i++)
+            {
+                this._ring[i] = new TCollection();
+                this._locks[i] = new ReaderWriterLockSlim();
+            }
         }
 
 
@@ -96,12 +100,12 @@ namespace Karadzhov.DecayingCollections
         protected int Cursor => this._cursor;
 
         /// <summary>
-        /// Gets the lock.
+        /// Gets the locks.
         /// </summary>
         /// <value>
-        /// The lock.
+        /// The locks.
         /// </value>
-        protected ReaderWriterLockSlim Lock => this._lock;
+        protected IReadOnlyList<ReaderWriterLockSlim> Locks => this._locks;
 
         /// <summary>
         /// Called when an item has decayed.
@@ -124,21 +128,12 @@ namespace Karadzhov.DecayingCollections
             // While doing Step logic other threads can safely act on the current cursor which is not changed until the end of the method.
             var newCursor = (this._cursor + 1) % this._ring.Length;
             var collectionToRemove = this._ring[newCursor];
-            this._ring[newCursor] = new TCollection();
+            Interlocked.Exchange(ref this._ring[newCursor], new TCollection());
             Interlocked.Add(ref this._count, - collectionToRemove.Count);
             this.SetupTimer();
 
-            // Make sure all all read/write operations on the current ring item are done before changing the cursor.
-            this.Lock.EnterWriteLock();
-            try
-            {
-                // The segment at the new cursor is ready for use.
-                Interlocked.Exchange(ref this._cursor, newCursor);
-            }
-            finally
-            {
-                this.Lock.ExitWriteLock();
-            }
+            // The segment at the new cursor is ready for use.
+            Interlocked.Exchange(ref this._cursor, newCursor);
 
             return collectionToRemove;
         }
@@ -179,14 +174,14 @@ namespace Karadzhov.DecayingCollections
         /// <param name="item">The object to add to the <see cref="T:System.Collections.Generic.ICollection`1" />.</param>
         public virtual void Add(TItem item)
         {
-            this._lock.EnterWriteLock();
+            this._locks[this._cursor].EnterWriteLock();
             try
             {
                 this._ring[this._cursor].Add(item);
             }
             finally
             {
-                this._lock.ExitWriteLock();
+                this._locks[this._cursor].ExitWriteLock();
             }
 
             Interlocked.Increment(ref this._count);
@@ -214,21 +209,14 @@ namespace Karadzhov.DecayingCollections
             bool isFound;
             for (var i = 0; i < this._ring.Length; i++)
             {
-                if (i != this._cursor)
+                this._locks[i].EnterReadLock();
+                try
                 {
                     isFound = this._ring[i].Contains(item);
                 }
-                else
+                finally
                 {
-                    this._lock.EnterReadLock();
-                    try
-                    {
-                        isFound = this._ring[i].Contains(item);
-                    }
-                    finally
-                    {
-                        this._lock.ExitReadLock();
-                    }
+                    this._locks[i].ExitReadLock();
                 }
 
                 if (isFound)
@@ -254,23 +242,15 @@ namespace Karadzhov.DecayingCollections
             var i = arrayIndex;
             for (var j = 0; j < this._ring.Length; j++)
             {
-                if (j != this._cursor)
+                this._locks[j].EnterReadLock();
+                try
                 {
                     foreach (var item in this._ring[j])
                         array[i++] = item;
                 }
-                else
+                finally
                 {
-                    this._lock.EnterReadLock();
-                    try
-                    {
-                        foreach (var item in this._ring[j])
-                            array[i++] = item;
-                    }
-                    finally
-                    {
-                        this._lock.ExitReadLock();
-                    }
+                    this._locks[j].ExitReadLock();
                 }
             }
         }
@@ -297,36 +277,29 @@ namespace Karadzhov.DecayingCollections
             bool hasRemoved;
             for (var i = 0; i < this._ring.Length; i++)
             {
-                if (i != this._cursor)
+                this._locks[i].EnterUpgradeableReadLock();
+                try
                 {
-                    hasRemoved = this._ring[i].Remove(item);
+                    if (this._ring[i].Contains(item))
+                    {
+                        this._locks[i].EnterWriteLock();
+                        try
+                        {
+                            hasRemoved = this._ring[i].Remove(item);
+                        }
+                        finally
+                        {
+                            this._locks[i].ExitWriteLock();
+                        }
+                    }
+                    else
+                    {
+                        hasRemoved = false;
+                    }
                 }
-                else
+                finally
                 {
-                    this._lock.EnterUpgradeableReadLock();
-                    try
-                    {
-                        if (this._ring[i].Contains(item))
-                        {
-                            this._lock.EnterWriteLock();
-                            try
-                            {
-                                hasRemoved = this._ring[i].Remove(item);
-                            }
-                            finally
-                            {
-                                this._lock.ExitWriteLock();
-                            }
-                        }
-                        else
-                        {
-                            hasRemoved = false;
-                        }
-                    }
-                    finally
-                    {
-                        this._lock.ExitUpgradeableReadLock();
-                    }
+                    this._locks[i].ExitUpgradeableReadLock();
                 }
 
                 if (hasRemoved)
@@ -363,7 +336,8 @@ namespace Karadzhov.DecayingCollections
                 if (disposing)
                 {
                     this._timer.Dispose();
-                    this._lock.Dispose();
+                    for (int i = 0; i < this._locks.Length; i++)
+                        this._locks[i].Dispose();
                 }
 
                 this.disposedValue = true;
