@@ -51,7 +51,13 @@ namespace Karadzhov.DecayingCollections
         /// </value>
         public bool IsRunning => this._isRunning;
 
-        private void TimerCallback(object state) => this._callback?.Invoke();
+        private void TimerCallback(object state)
+        {
+            lock (this)
+            {
+                this._callback?.Invoke();
+            }
+        }
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
